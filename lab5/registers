@@ -1,0 +1,26 @@
+############################################################
+# Calling conventions:
+#     %rdi, %rsi, %rdx, %rcx, %r8, %r9, %r10, %r11 and %rax are caller saved
+#     %rbx, %rbp, %r12, %r13, %r14 are callee saved
+#     %rsp can not be used except for its normal use as a stack pointer.
+#     argument are passed through registers %rdi, %rsi, %rdx in this order.
+#     values are returned through %rax
+############################################################
+
+Callee saved:
+%rbx = 1
+%rbp = 2
+
+Caller saved:
+%rdi = size of array
+%rsi = last index
+%rdx = i (heapify_array)
+
+%r11 = index (heapify_node)
+%rcx = highest
+
+Scratch registers
+%r8 = child index
+%r9 = child value heap[%r8]
+%r10 = highest value heap[%rcx]
+%rax

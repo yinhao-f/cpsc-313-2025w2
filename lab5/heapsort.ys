@@ -1,0 +1,250 @@
+############################################################
+# Calling conventions:
+#     %rdi, %rsi, %rdx, %rcx, %r8, %r9, %r10, %r11 and %rax are caller saved
+#     %rbx, %rbp, %r12, %r13, %r14 are callee saved
+#     %rsp can not be used except for its normal use as a stack pointer.
+#     argument are passed through registers %rdi, %rsi, %rdx in this order.
+#     values are returned through %rax
+############################################################
+.pos 0x100
+
+main:	
+	xorq   %rdi, %rdi        # %rdi = 0
+	mrmovq size(%rdi), %rdi  # %rdi = size
+	
+	irmovq bottom,  %rsp     # initialize stack
+	call   heapsort
+	halt
+
+############################################################
+# heapsort
+############################################################
+heapsort:
+    # Store callee saved registers in case we modify them. 
+    pushq   %rbx
+    pushq   %rbp
+
+    # Store some constants that won't likely be changed
+    irmovq  $1, %rbx        # %rbx = 1
+    irmovq  $2, %rbp        # %rbp = 2
+
+############################################################
+# 1. Heapify the array
+############################################################
+
+    rrmovq  %rdi, %rsi      # %rsi = size
+    subq    %rbx, %rsi      # %rsi = size - 1 = last index
+
+    # Inline heapify_array(last = %rsi)
+    rrmovq  %rsi, %rdx      # %rdx = i
+    subq    %rbx, %rdx
+    divq    %rbp, %rdx      # %rdx = (last - 1) / 2
+    jl      ha_loop_end     # BP: never taken
+
+ha_loop_start:
+    # Inline heapify_node(index = %rdx, last = %rsi)
+    rrmovq  %rdx, %r11      # %r11 = index
+    rrmovq  %rdx, %rcx      # %rcx = highest = index
+
+hn_loop_start:
+    # Left child
+    rrmovq  %r11, %r8       # %r8 = left_child
+    mulq    %rbp, %r8
+    addq    %rbx, %r8       # %r8 = 2 * index + 1
+
+    # Inline check_child(left_child = %r8, highest = %rcx, last = %rsi)
+    # Check if child <= last (index boundary check)
+    rrmovq  %r8, %rax
+    subq    %rsi, %rax      # %rax = child - last > 0? skip:continue
+    jg      hn_loop_end
+
+    irmovq  $8, %rax
+    mulq    %r8, %rax       # %rax = 8 * %r8
+    mrmovq  heap(%rax), %r9     # %r9 = heap[child]
+    irmovq  $8, %rax
+    mulq    %rcx, %rax      # %rax = 8 * %rcx
+    mrmovq  heap(%rax), %r10    # %r10 = heap[highest]
+    subq    %r9, %r10       # %r10 = heap[highest]-heap[child] < 0?
+    cmovl   %r8, %rcx       # highest = child
+
+    # Right child
+    addq    %rbx, %r8       # %r8 = left_child + 1 = right_child
+    
+    # Inline check_child(right_child = %r8, highest = %rcx, last = %rsi)
+    # Check if child <= last (index boundary check)
+    rrmovq  %r8, %rax
+    subq    %rsi, %rax      # %rax = child - last > 0? skip:continue
+    jg      check_swap      # **Check swap for left child**
+
+    irmovq  $8, %rax
+    mulq    %r8, %rax       # %rax = 8 * %r8
+    mrmovq  heap(%rax), %r9     # %r9 = heap[child]
+    irmovq  $8, %rax
+    mulq    %rcx, %rax      # %rax = 8 * %rcx
+    mrmovq  heap(%rax), %r10    # %r10 = heap[highest]
+    subq    %r9, %r10       # %r10 = heap[highest]-heap[child] < 0?
+    cmovl   %r8, %rcx       # highest = child
+
+    # Swap keys if needed
+check_swap:
+    rrmovq  %r11, %rax      # %rax = index
+    subq    %rcx, %rax      # %rax = index - highest = 0?
+
+    je      hn_loop_end     # index = highest, don't need to swap
+
+    # Need to swap
+    irmovq  $8, %rax
+    mulq    %r11, %rax      # %rax = 8 * %r11
+    mrmovq  heap(%rax), %r9     # %r9 = heap[index]
+    irmovq  $8, %r8
+    mulq    %rcx, %r8       # %8 = 8 * %rcx
+    mrmovq  heap(%r8), %r10    # %r10 = heap[highest]
+
+    rmmovq  %r9, heap(%r8)
+    rmmovq  %r10, heap(%rax)
+    rrmovq  %rcx, %r11      # index = highest
+    jmp     hn_loop_start   # while (need_to_swap)
+
+hn_loop_end:
+    subq    %rbx, %rdx      # %rdx--
+    jge     ha_loop_start   # BP: always taken
+
+ha_loop_end:
+
+############################################################
+# 2. Extract max from heap
+############################################################
+
+    # Extract the root once at a time, and re-heapify
+    rrmovq  %rsi, %rdx      # %rdx = i = size - 1
+    andq    %rdx, %rdx
+    jl      hs_loop_end     # %rdx < 0
+
+hs_loop_start:
+    # Swap heap[0], heap[i]
+    irmovq  $0, %rax
+    mrmovq  heap(%rax), %r9 # %r9 = heap[0]
+    rrmovq  %rdx, %r8
+    irmovq  $8, %rcx
+    mulq    %rcx, %r8       # %r8 = i * 8
+    mrmovq  heap(%r8), %r10 # %r10 = heap[i]
+    rmmovq  %r9, heap(%r8)
+    rmmovq  %r10, heap(%rax)
+
+    # Re-heapify (0, i-1)
+    subq    %rbx, %rsi      # %rsi--
+
+    # Inline heapify_node(index = 0, last = %rsi = i-1)
+    irmovq  $0, %r11        # %r11 = index = 0
+    irmovq  $0, %rcx        # %rcx = highest = index
+
+reheap_loop_start:
+    # Left child
+    rrmovq  %r11, %r8       # %r8 = left_child
+    mulq    %rbp, %r8
+    addq    %rbx, %r8       # %r8 = 2 * index + 1
+
+    # Inline check_child(left_child = %r8, highest = %rcx, last = %rsi)
+    # Check if child <= last (index boundary check)
+    rrmovq  %r8, %rax
+    subq    %rsi, %rax      # %rax = child - last > 0? skip:continue
+    jg      reheap_loop_end
+
+    irmovq  $8, %rax
+    mulq    %r8, %rax       # %rax = 8 * %r8
+    mrmovq  heap(%rax), %r9     # %r9 = heap[child]
+    irmovq  $8, %rax
+    mulq    %rcx, %rax      # %rax = 8 * %rcx
+    mrmovq  heap(%rax), %r10    # %r10 = heap[highest]
+    subq    %r9, %r10       # %r10 = heap[highest]-heap[child] < 0?
+    cmovl   %r8, %rcx       # highest = child
+
+    # Right child
+    addq    %rbx, %r8       # %r8 = left_child + 1 = right_child
+    
+    # Inline check_child(right_child = %r8, highest = %rcx, last = %rsi)
+    # Check if child <= last (index boundary check)
+    rrmovq  %r8, %rax
+    subq    %rsi, %rax      # %rax = child - last > 0? skip:continue
+    jg      reheap_check_swap   # **Check swap for left child**
+
+    irmovq  $8, %rax
+    mulq    %r8, %rax       # %rax = 8 * %r8
+    mrmovq  heap(%rax), %r9     # %r9 = heap[child]
+    irmovq  $8, %rax
+    mulq    %rcx, %rax      # %rax = 8 * %rcx
+    mrmovq  heap(%rax), %r10    # %r10 = heap[highest]
+    subq    %r9, %r10       # %r10 = heap[highest]-heap[child] < 0?
+    cmovl   %r8, %rcx       # highest = child
+
+reheap_check_swap:
+    # Swap keys if needed
+    rrmovq  %r11, %rax      # %rax = index
+    subq    %rcx, %rax      # %rax = index - highest = 0?
+
+    je      reheap_loop_end     # index = highest, don't need to swap
+
+    # Need to swap
+    irmovq  $8, %rax
+    mulq    %r11, %rax      # %rax = 8 * %r11
+    mrmovq  heap(%rax), %r9     # %r9 = heap[index]
+    irmovq  $8, %r8
+    mulq    %rcx, %r8       # %8 = 8 * %rcx
+    mrmovq  heap(%r8), %r10    # %r10 = heap[highest]
+
+    rmmovq  %r9, heap(%r8)
+    rmmovq  %r10, heap(%rax)
+    rrmovq  %rcx, %r11      # index = highest
+    jmp     reheap_loop_start   # while (need_to_swap)
+
+reheap_loop_end:
+    subq    %rbx, %rdx      # %rdx--
+    jge     hs_loop_start
+
+hs_loop_end:
+    # Pop callee saved registers and return
+    popq   %rbp
+    popq   %rbx
+    ret
+
+############################################################
+# Array to sort
+############################################################
+.pos 0x1000
+heap:	
+	.quad	0x7
+	.quad	0x6
+	.quad	0x5
+	.quad	0x4
+	.quad	0x3
+    .quad   0x2
+    .quad   0x1
+
+size:   
+    .quad   7
+	
+############################################################
+# Stack (32 thirty-two bit words is more than enough here).
+############################################################
+.pos 0x3000
+top:	            .quad 0x00000000		# top of stack.
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+                    .quad 0x00000000
+bottom:             .quad 0x00000000		# bottom of stack.
