@@ -6,8 +6,8 @@
 
 #include "utils.h"
 
-#define INPUT_IMAGE_NAME "images/roseGarden.png"
-#define OUTPUT_IMAGE_NAME "output/roseGarden.png"
+#define INPUT_IMAGE_NAME "images/image.png"
+#define OUTPUT_IMAGE_NAME "output/image.png"
 
 static int32_t output[LAYERS][HEIGHT][WIDTH];
 static int32_t expected_output[LAYERS][HEIGHT][WIDTH];
