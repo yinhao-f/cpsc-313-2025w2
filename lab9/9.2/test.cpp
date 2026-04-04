@@ -130,19 +130,25 @@ TEST_CASE("test_too_large", "[weight=1][part=test]"){
     // **** Write your own test here. ****
 
     // block_size
-    uint64_t block_size;
+    uint64_t block_size = TEST_BLOCK_SIZE;
 
     // inode
     CS313inode_t inode;
+    inode.i_size = block_size;  // file size = 1 block
     
     // getBlock
     auto getBlock = [](uint64_t block_no) {
         return valid_block;
     };
 
-    uint64_t lbn;
-    uint64_t expected_pbn;
-    // uint64_t actual_pbn = lbnToPbn(&inode, lbn, block_size, getBlock);
+    uint64_t lbn = VERY_LARGE_NUMBER;
+    uint64_t expected_pbn = BAD_PBN;
+    uint64_t actual_pbn = lbnToPbn(&inode, lbn, block_size, getBlock);
 
-    // REQUIRE(actual_pbn == expected_pbn);
+    REQUIRE(actual_pbn == expected_pbn);
+
+    lbn = 2;    // just one block beyond EOF
+    actual_pbn = lbnToPbn(&inode, lbn, block_size, getBlock);
+
+    REQUIRE(actual_pbn == expected_pbn);
 }

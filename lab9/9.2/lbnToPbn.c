@@ -26,5 +26,38 @@ static inline uint64_t get_pointer(block_t block, uint64_t index)
  */
 uint64_t lbnToPbn(CS313inode_t *inode, uint64_t lbn, uint64_t block_size, block_t(*getBlock)(uint64_t block_no))
 {
-    return BAD_PBN;
+    // some boundary checks
+    if (lbn * block_size > inode->i_size) return BAD_PBN;
+
+    uint64_t ptrs_per_block = block_size / sizeof(lbn);     // using lbn as the address size
+    uint64_t max_blocks = NUM_DIRECT + ptrs_per_block * ptrs_per_block;
+    uint64_t max_file_size = block_size * max_blocks;
+    if (inode->i_size > max_file_size) return BAD_PBN;
+    if (lbn >= max_blocks) return BAD_PBN;
+
+    // look up pbn
+    uint64_t pbn;
+    block_t physical_block;
+    if (lbn < NUM_DIRECT) {
+        pbn = inode->i_direct[lbn];
+        physical_block = getBlock(pbn);
+        if (!physical_block.is_valid) return 0xA00BAD;
+        return pbn;
+    }
+
+    lbn -= NUM_DIRECT;
+
+    uint64_t indirect_index = lbn / ptrs_per_block;
+    uint64_t pbn_index = lbn % ptrs_per_block;
+
+    if (inode->i_2indirect == HOLE_PBN) return HOLE_PBN;
+    block_t double_indir_block = getBlock(inode->i_2indirect);
+
+    uint64_t indir_block_addr = get_pointer(double_indir_block, indirect_index);
+    if (indir_block_addr == HOLE_PBN) return HOLE_PBN;
+    block_t indir_block = getBlock(indir_block_addr);
+
+    pbn = get_pointer(indir_block, pbn_index);
+
+    return pbn;
 }
