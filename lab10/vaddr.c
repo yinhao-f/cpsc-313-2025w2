@@ -28,7 +28,35 @@ int map_page(vaddr_t virt, paddr_t phys, unsigned char perms) {
    * that virt_read32/virt_write32 can use to access that physical location.
    */
   (void)virt; (void)phys; (void)perms;
-  return -1;
+
+  if (virt >= PADDR_OFFSET) return -1;
+  if (OFST(virt) != 0) return -1;
+  if (OFST(phys) != 0) return -1;
+
+  paddr_t l1_pte_addr;
+  paddr_t l2_page_addr;
+  paddr_t l2_pte_addr;
+  pte_t l1_pte;
+  pte_t l2_pte;
+
+  l1_pte_addr = root_phys_pte_addr + L1_INDEX(virt) * sizeof(pte_t);
+  l1_pte = virt_read32(l1_pte_addr + PADDR_OFFSET);
+
+  if (!PRES(l1_pte)) {
+    l2_page_addr = phys_alloc_page();
+    l1_pte = MAKE_PTE(l2_page_addr, perms);
+    virt_write32(l1_pte_addr + PADDR_OFFSET, l1_pte);
+  }
+
+  l2_page_addr = PADDR(l1_pte);
+  l2_pte_addr = l2_page_addr + L2_INDEX(virt) * sizeof(pte_t);
+  l2_pte = virt_read32(l2_pte_addr + PADDR_OFFSET);
+  if (PRES(l2_pte)) return -1;
+
+  l2_pte = MAKE_PTE(phys, perms);
+  virt_write32(l2_pte_addr + PADDR_OFFSET, l2_pte);
+
+  return 0;
 }
 
 int unmap_page(vaddr_t virt) {
@@ -39,8 +67,30 @@ int unmap_page(vaddr_t virt) {
    * 3. If the L1 or L2 entry is not present, return -1.
    * 4. Clear the L2 entry (write 0) to mark it not present.
    */
-  (void)virt;
-  return -1;
+  // (void)virt;
+
+  if (virt >= PADDR_OFFSET) return -1;
+  if (OFST(virt) != 0) return -1;
+
+  paddr_t l1_pte_addr;
+  paddr_t l2_page_addr;
+  paddr_t l2_pte_addr;
+  pte_t l1_pte;
+  pte_t l2_pte;
+
+  l1_pte_addr = root_phys_pte_addr + L1_INDEX(virt) * sizeof(pte_t);
+  l1_pte = virt_read32(l1_pte_addr + PADDR_OFFSET);
+
+  if (!PRES(l1_pte)) return -1;
+
+  l2_page_addr = PADDR(l1_pte);
+  l2_pte_addr = l2_page_addr + L2_INDEX(virt) * sizeof(pte_t);
+  l2_pte = virt_read32(l2_pte_addr + PADDR_OFFSET);
+  if (!PRES(l2_pte)) return -1;
+
+  virt_write32(l2_pte_addr + PADDR_OFFSET, 0);
+
+  return 0;
 }
 
 paddr_t virt_to_phys(vaddr_t virt, unsigned char perms) {
@@ -68,5 +118,26 @@ paddr_t virt_to_phys(vaddr_t virt, unsigned char perms) {
    * 7. Return the physical address: base from L2 entry | offset from virt.
    */
   (void)perms;
-  return PHYS_FAULT;
+
+  if (virt >= PADDR_OFFSET) return -1;
+
+  paddr_t l1_pte_addr;
+  paddr_t l2_page_addr;
+  paddr_t l2_pte_addr;
+  pte_t l1_pte;
+  pte_t l2_pte;
+
+  l1_pte_addr = root_phys_pte_addr + L1_INDEX(virt) * sizeof(pte_t);
+  l1_pte = virt_read32(l1_pte_addr + PADDR_OFFSET);
+
+  if (!PRES(l1_pte)) return PHYS_FAULT;
+  if (!(PERM(l1_pte) & perms)) return PHYS_FAULT;
+
+  l2_page_addr = PADDR(l1_pte);
+  l2_pte_addr = l2_page_addr + L2_INDEX(virt) * sizeof(pte_t);
+  l2_pte = virt_read32(l2_pte_addr + PADDR_OFFSET);
+  if (!PRES(l2_pte)) return PHYS_FAULT;
+  if (!(PERM(l2_pte) & perms)) return PHYS_FAULT;
+
+  return PADDR(l2_pte) | OFST(virt);
 }
