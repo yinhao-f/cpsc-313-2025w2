@@ -149,4 +149,3 @@ int unmap_page(vaddr_t virt);
 paddr_t virt_to_phys(vaddr_t virt, unsigned char perms);
 
 #endif /* PGTABLE_H */
-

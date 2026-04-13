@@ -19,4 +19,3 @@ uint32_t phys_read32(paddr_t phys);
 void phys_write32(paddr_t phys, uint32_t val);
 
 #endif /* PADDR_INTERNAL_H */
-

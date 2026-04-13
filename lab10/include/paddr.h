@@ -17,4 +17,3 @@ typedef uint32_t paddr_t;
 paddr_t phys_alloc_page(void);
 
 #endif /* PADDR_H */
-

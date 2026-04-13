@@ -51,4 +51,3 @@ void phys_write32(paddr_t phys, uint32_t val) {
   }
   *(uint32_t *)(phys_mem + phys) = val;
 }
-

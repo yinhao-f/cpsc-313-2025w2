@@ -35,4 +35,3 @@ void virt_exec32(vaddr_t virt, int *return_value) {
   }
   *return_value = 0;
 }
-

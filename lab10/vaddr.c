@@ -70,4 +70,3 @@ paddr_t virt_to_phys(vaddr_t virt, unsigned char perms) {
   (void)perms;
   return PHYS_FAULT;
 }
-
